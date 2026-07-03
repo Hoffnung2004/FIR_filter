@@ -50,6 +50,7 @@ print_point = 100;
 
 % Тест 1. Нули.
 data_in = zeros(print_point+1,1);
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 
@@ -58,10 +59,10 @@ data_out = data_out(:);
 
 
 fid = fopen('test1_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in)); 
 fclose(fid);
 fid = fopen('test1_out.txt', 'w');
-fprintf(fid, '%d \n', data_out); 
+fprintf(fid, '%d \n', round(data_out)); 
 fclose(fid);
 
 plot_title = 'Тест 1 (нули)';
@@ -77,12 +78,13 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 
 % Тест 2. Единичный испульс
 data_in = [zeros(10,1); 1; zeros(400,1)];
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
 data_out = data_out(:);
 fid = fopen('test2_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in)); 
 fclose(fid);
 fid = fopen('test2_out.txt', 'w');
 fprintf(fid, '%d \n', data_out); 
@@ -99,12 +101,13 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 
 % Тест 3. Ступенька
 data_in = [zeros(10,1); ones(400,1)];
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
 data_out = data_out(:);
 fid = fopen('test3_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in));  
 fclose(fid);
 fid = fopen('test3_out.txt', 'w');
 fprintf(fid, '%d \n', data_out); 
@@ -123,12 +126,13 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 
 freq = 1e6;
 data_in = [zeros(1,10) (2^(Wsignal-1)-1)*sin(2*pi*freq*t)]';
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
 data_out = data_out(:);
 fid = fopen('test4_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in)); 
 fclose(fid);
 fid = fopen('test4_out.txt', 'w');
 fprintf(fid, '%d \n', data_out); 
@@ -146,12 +150,13 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 % Тест 5. Синус в переходной области
 freq = 3e6;
 data_in = [zeros(1,10) (2^(Wsignal-1)-1)*sin(2*pi*freq*t)]';
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
 data_out = data_out(:);
 fid = fopen('test5_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in)); 
 fclose(fid);
 fid = fopen('test5_out.txt', 'w');
 fprintf(fid, '%d \n', data_out); 
@@ -169,12 +174,13 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 % Тест 6. Синус в полосе подавления
 freq = 6e6;
 data_in = [zeros(1,10) (2^(Wsignal-1)-1)*sin(2*pi*freq*t)]';
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
     Wsignal, Wtaps, Wout, Wfinal, roundMethod);
-data_in = data_in(:);
+
 data_out = data_out(:);
 fid = fopen('test6_in.txt', 'w');
-fprintf(fid, '%d \n', data_in); 
+fprintf(fid, '%d \n', round(data_in)); 
 fclose(fid);
 fid = fopen('test6_out.txt', 'w');
 fprintf(fid, '%d \n', data_out); 
@@ -192,6 +198,7 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 % Тест 7. Тест на переполнение 1
 data_in = (2^(Wsignal-1))*repmat(double(sign(double(taps_newF(end:-1:1)))), 1, 20);
 data_in = min(data_in,2^(Wsignal-1)-1);
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
      Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
@@ -214,6 +221,7 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 
 % Тест 8. Тест на переполнение 2
 data_in = -(2^(Wsignal-1))*repmat(double(sign(double(taps_newF(end:-1:1)))), 1, 20);
+data_in = round(data_in);
 data_in = min(data_in,2^(Wsignal-1)-1);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
      Wsignal, Wtaps, Wout, Wfinal, roundMethod);
@@ -238,6 +246,7 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 
 % Тест 9. Шум
 data_in = randi([-(2^(Wsignal-1)) (2^(Wsignal-1))-1],1000,1);
+data_in = round(data_in);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
      Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
@@ -262,6 +271,7 @@ createScientificPlotC(x, y, line_styles, line_widths, marker_types, marker_sizes
 freq1 = 1e6;
 freq2 = 6e6;
 data_in = [zeros(1,10) (2^(Wsignal-1)-1)*sin(2*pi*freq1*t)+(2^(Wsignal-1)-1)*sin(2*pi*freq2*t)]';
+data_in = round(data_in/2);
 data_out = quantFilterIntOutWL(data_in, taps_new, ...
      Wsignal, Wtaps, Wout, Wfinal, roundMethod);
 data_in = data_in(:);
