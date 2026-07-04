@@ -8,7 +8,23 @@ package fir_filter_params_pkg;
     localparam int COEFF_WIDTH  = 16;
     localparam int COEFF_NUM    = 32;
     localparam int TREE_STEP    =  2; // По умолчанию
-    
+
+    localparam int INPUT_TREE_STEP = 8;
+    localparam int INPUT_TREE_LEN  = tree_len(COEFF_NUM, INPUT_TREE_STEP);
+
+    typedef int input_tree_width_array_t [0:INPUT_TREE_LEN-1];
+
+    function automatic input_tree_width_array_t input_tree_width();
+        input_tree_width_array_t width;
+        width[0] = 1;
+        for (int i = 1; i < INPUT_TREE_LEN; i++) begin
+            int next_width = width[i-1] * INPUT_TREE_STEP;
+            width[i] = (next_width < COEFF_NUM) ? next_width : COEFF_NUM;
+        end
+        return width;
+    endfunction
+
+    localparam int INPUT_TREE_WIDTH [0:INPUT_TREE_LEN-1] = input_tree_width();
         
         localparam logic signed [COEFF_WIDTH-1:0] COEFFS [0:COEFF_NUM-1] = '{
      // сюда коэффициенты
@@ -116,6 +132,7 @@ package fir_filter_params_pkg;
     localparam int MUL_WIDTH [0:COEFF_NUM-1] = reverse_taps_array();
     localparam int TRAN_WIDTH [0:COEFF_NUM-1] = bit_width_tran();
     
-    
+    //добавил Зубковский, почему-то при прямом использовании[TRAN_WIDTH[COEFF_NUM-1]-1:0] Vivado выдавал ошибку
+    localparam int RESULT_WIDTH = TRAN_WIDTH[COEFF_NUM-1];
      
 endpackage
