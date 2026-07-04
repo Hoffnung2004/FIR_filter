@@ -5,7 +5,7 @@ module fir_filter_top_tb;
     localparam string FILE_DIR = "../../../../fir_filter_project.ip_user_files/mem_init_files/";
     // Параметры теста
     localparam int TEST_NUM = 9;          // <-- МЕНЯТЬ ЭТОТ НОМЕР ДЛЯ РАЗНЫХ ТЕСТОВ
-    localparam int DELAY    = 1;         // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ 
+    localparam int DELAY    = 6;         // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ 
 
     // Сигналы
     logic clk_i;
