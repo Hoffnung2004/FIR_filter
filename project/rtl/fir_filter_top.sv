@@ -4,15 +4,14 @@ import fir_filter_params_pkg::*;
 
 module fir_filter_top
 #(
-    parameter int ARCHITECTURE = 1 //ВЫБОР АРХИТЕКТУРЫ 0 - дерево, 1 - транспонированная
+    parameter int ARCHITECTURE = 0 //ВЫБОР АРХИТЕКТУРЫ 0 - дерево, 1 - транспонированная
 )(
     input  logic clk_i,
-    input  logic reset_i, //не используется, добавлен так как есть в тб
+    input  logic reset_i, 
     input  logic signed [SIGNAL_WIDTH-1:0] signal_i,
     output logic signed [RESULT_WIDTH-1:0] signal_o
 );
 
-wire unused_reset_i = reset_i;
     generate
         if (ARCHITECTURE == 0) begin : g_tree_arch
                 logic signed [SIGNAL_WIDTH-1:0] tap_line [0:COEFF_NUM-1] = '{default:'0};
@@ -90,16 +89,24 @@ wire unused_reset_i = reset_i;
             logic signed [0:COEFF_NUM-1][SIGNAL_WIDTH-1:0] tree_node [0:INPUT_TREE_LEN-1];
             
             // уровень 0
-            always_ff @(posedge clk_i) begin
-                tree_node[0][0] <= signal_i;
+            always_ff @(posedge clk_i or posedge reset_i) begin
+                if(reset_i) begin
+                    tree_node[0][0] <= '0;
+                end else begin
+                    tree_node[0][0] <= signal_i;
+                end
             end
             
             for (genvar lvl = 1; lvl < INPUT_TREE_LEN; lvl++) begin : g_tree_lvl
                 for (genvar node = 0; node < INPUT_TREE_WIDTH[lvl]; node++) begin : g_tree_node
                     localparam int PARENT = node / INPUT_TREE_STEP;
                     
-                    always_ff @(posedge clk_i) begin
-                        tree_node[lvl][node] <= tree_node[lvl-1][PARENT];
+                    always_ff @(posedge clk_i or posedge reset_i) begin
+                        if(reset_i) begin
+                            tree_node[lvl][node] <= '0;
+                        end else begin
+                            tree_node[lvl][node] <= tree_node[lvl-1][PARENT];
+                        end
                     end
                 end
             end
@@ -126,8 +133,12 @@ wire unused_reset_i = reset_i;
                 .o_result  (mac_result[0])
             );
 
-            always_ff @(posedge clk_i) begin
-                delay_line[0] <= mac_result[0];
+            always_ff @(posedge clk_i or posedge reset_i) begin
+                if(reset_i) begin
+                    delay_line[0] <= '0;
+                end else begin
+                    delay_line[0] <= mac_result[0];
+                end
             end
 
             for (genvar i = 1; i < COEFF_NUM; i++) begin : g_tap
@@ -145,7 +156,11 @@ wire unused_reset_i = reset_i;
 
                 if (i < COEFF_NUM-1) begin : g_delay_reg
                     always_ff @(posedge clk_i) begin
-                        delay_line[i] <= mac_result[i];
+                        if(reset_i) begin
+                            delay_line[i] <= '0;
+                        end else begin
+                            delay_line[i] <= mac_result[i];
+                        end
                     end
                 end
             end
