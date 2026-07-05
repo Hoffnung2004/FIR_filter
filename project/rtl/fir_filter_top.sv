@@ -86,29 +86,39 @@ wire unused_reset_i = reset_i;
         end
         else begin : g_transposed_arch
 
-            logic signed [SIGNAL_WIDTH-1:0] input_tree [0:INPUT_TREE_LEN-1][0:COEFF_NUM-1];
-            logic signed [SIGNAL_WIDTH-1:0] x_tap     [0:COEFF_NUM-1];
+            (* dont_touch = "yes" *)
+            logic signed [SIGNAL_WIDTH-1:0] tree_node [0:INPUT_TREE_LEN-1][0:COEFF_NUM-1];
 
+            // уровень 0
             always_ff @(posedge clk_i) begin
-                input_tree[0][0] <= signal_i; 
+                tree_node[0][0] <= signal_i;
             end
 
-            for (genvar lvl = 1; lvl < INPUT_TREE_LEN; lvl++) begin : g_in_tree_lvl
-                for (genvar node = 0; node < INPUT_TREE_WIDTH[lvl]; node++) begin : g_in_tree_node
+            for (genvar lvl = 1; lvl < INPUT_TREE_LEN; lvl++) begin : g_tree_lvl
+                for (genvar node = 0; node < INPUT_TREE_WIDTH[lvl]; node++) begin : g_tree_node
+                    localparam int PARENT = node / INPUT_TREE_STEP;
+                    
+                    (* dont_touch = "yes" *)
+                    logic signed [SIGNAL_WIDTH-1:0] node_reg;
+                    
                     always_ff @(posedge clk_i) begin
-                        input_tree[lvl][node] <= input_tree[lvl-1][node / INPUT_TREE_STEP];
+                        node_reg <= tree_node[lvl-1][PARENT];
                     end
+                    
+                    assign tree_node[lvl][node] = node_reg;
                 end
             end
 
+            // листья дерева
+            logic signed [SIGNAL_WIDTH-1:0] x_tap [0:COEFF_NUM-1];
             for (genvar i = 0; i < COEFF_NUM; i++) begin : g_x_tap
-                assign x_tap[i] = input_tree[INPUT_TREE_LEN-1][i];
+                assign x_tap[i] = tree_node[INPUT_TREE_LEN-1][i];
             end
 
             logic signed [RESULT_WIDTH-1:0] mac_result [0:COEFF_NUM-1];
             logic signed [RESULT_WIDTH-1:0] delay_line [0:COEFF_NUM-2];
 
-            //нулевой коэффициент
+            // нулевой коэффициент
             filter_cell #(
                 .FACTOR_0_WIDTH(SIGNAL_WIDTH),
                 .FACTOR_1_WIDTH(COEFF_WIDTH),
