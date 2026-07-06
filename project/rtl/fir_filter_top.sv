@@ -15,7 +15,7 @@ module fir_filter_top
 wire unused_reset_i = reset_i;
     generate
         if (ARCHITECTURE == 0) begin : g_tree_arch
-                logic signed [SIGNAL_WIDTH-1:0] tap_line [0:COEFF_NUM-1] = '{default:'0};
+                logic signed [SIGNAL_WIDTH-1:0] tap_line [0:COEFF_NUM-1];
 
     always_ff @(posedge clk_i) begin
         tap_line[0] <= signal_i;
@@ -31,7 +31,7 @@ wire unused_reset_i = reset_i;
         localparam int W = TREE_BIT_WIDTH[0][mul_i];
 
         logic signed [W-1:0] result_comb;
-        logic signed [W-1:0] q = '0;
+        logic signed [W-1:0] q;
 
         filter_cell #(
             .FACTOR_0_WIDTH(SIGNAL_WIDTH),
