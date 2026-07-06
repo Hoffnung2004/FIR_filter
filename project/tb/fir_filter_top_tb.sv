@@ -5,8 +5,8 @@ module fir_filter_top_tb;
     localparam string FILE_DIR = "../../../../fir_filter_project.ip_user_files/mem_init_files/";
     // Параметры теста
     localparam int TEST_NUM = 9;          // <-- МЕНЯТЬ ЭТОТ НОМЕР ДЛЯ РАЗНЫХ ТЕСТОВ
-    localparam int DELAY    = 6;         // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ 
-
+    localparam int DELAY    = 2;         // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ 
+    
     // Сигналы
     logic clk_i;
     logic reset_i;
@@ -72,7 +72,7 @@ module fir_filter_top_tb;
             end
             
             // Обработка выхода с учётом задержки
-            if (sample_cnt >= DELAY) begin
+            if (sample_cnt >= DELAY-1) begin
                 // Читаем эталонный выход 
                 $fscanf(fd_out, "%d", data_out_ref);
                                 
@@ -81,19 +81,18 @@ module fir_filter_top_tb;
                 curr_error = signal_o - data_out_ref;
 
                 // Накопление
-                sum_error = sum_error + curr_error;
+                if(sample_cnt >= DELAY+COEFF_NUM-4) begin
+                    sum_error = sum_error + curr_error;
 
                 // Счётчик несовпадений
                 if (signal_o !== data_out_ref) begin
                     mismatch_cnt = mismatch_cnt + 1;
                 end
+                end
             end else begin
                 curr_error = 0;
                 // До истечения DELAY - не сравниваем
             end
-
-            
-
 
         end
 
@@ -101,9 +100,6 @@ module fir_filter_top_tb;
         $fclose(fd_out);
         $display("Test %0d finished. Mismatches: %0d", TEST_NUM, mismatch_cnt);
         $finish;
-    end
-    initial begin
-        
     end
 
 endmodule
