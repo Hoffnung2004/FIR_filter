@@ -2,24 +2,22 @@ module param_filter
 #(
     parameter int N = 16, // обязательно кратное 4
     parameter int BITS_W=40,
-    parameter int MULT_LATENCY = 0  // Задержка умножителя
+    parameter int MULT_LATENCY = 21  // Задержка умножителя в тактах
 )(
     input logic reset_i,
     input logic clk_i,
     input logic enable_i,
     input logic signed [15:0] signal_i,
-    input logic signed [15:0] taps_i [0:N-1], // можете поменять порядок на N-1:0
+    input logic signed [15:0] taps_i [0:N-1],
     input logic order_sel_i, // 0 -> N, 1 -> N/2
-    input logic clk2x_i,
     output logic signed [BITS_W-1:0] signal_o   
 );
 
     localparam int HALF = N / 2;
-    localparam int TREE_DEPHT = $clog2(HALF);
     localparam int NUM_PAIRS = HALF / 2;
     
     localparam int ADDER_TREE_LATENCY = (NUM_PAIRS <= 1) ? 0 : $clog2(NUM_PAIRS);
-    localparam int TOTAL_LATENCY = MULT_LATENCY + ADDER_TREE_LATENCY + 1;
+    localparam int TOTAL_LATENCY = MULT_LATENCY + ADDER_TREE_LATENCY + 2;
     
     logic signed [BITS_W-1:0] upper_ff  [0:HALF-1];
     logic signed [BITS_W-1:0] upper_next [0:HALF-1];
@@ -281,21 +279,21 @@ module param_filter
     end: p_final_regs
 
     // PSC
-    logic psc_sel_ff;
-
-    always_ff @(posedge clk2x_i) begin: p_psc
+    logic psc_phase_ff;
+    
+    always_ff @(posedge clk_i) begin: p_psc_phase
         if (reset_i) begin
-            psc_sel_ff <= '0;
+            psc_phase_ff <= '0;
         end else if (enable_i) begin
-            psc_sel_ff <= ~psc_sel_ff;
+            psc_phase_ff <= ~psc_phase_ff;
         end
-    end: p_psc
+    end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_sel_ff == '0) ? y_current_ff : y_prev_ff;
+    assign psc_out = (psc_phase_ff == '0) ? y_prev_ff : y_current_ff;
 
-    logic signed [BITS_W-1:0] signal_o_n_ff;   // N на clk_i
-    logic signed [BITS_W-1:0] signal_o_n2_ff;  // N/2 на clk2x_i
+    logic signed [BITS_W-1:0] signal_o_n_ff;   // N
+    logic signed [BITS_W-1:0] signal_o_n2_ff;  // N/2
 
     always_ff @(posedge clk_i) begin: p_out_n
         if (reset_i) begin
@@ -305,7 +303,7 @@ module param_filter
         end
     end: p_out_n
 
-    always_ff @(posedge clk2x_i) begin: p_out_n2
+    always_ff @(posedge clk_i) begin: p_out_n2
         if (reset_i) begin
             signal_o_n2_ff <= '0;
         end else if (enable_i) begin
