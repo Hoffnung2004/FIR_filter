@@ -7,11 +7,14 @@ module param_filter
     input logic reset_i,
     input logic clk_i,
     input logic enable_i,
+    input logic strob_i,
     input logic signed [15:0] signal_i,
     input logic signed [15:0] taps_i [0:N-1],
     input logic order_sel_i, // 0 -> N, 1 -> N/2
     output logic signed [BITS_W-1:0] signal_o   
 );
+    logic enable;
+    assign enable=(enable_i&(!order_sel_i))|(enable_i&order_sel_i&strob_i);
 
     localparam int HALF = N / 2;
     localparam int NUM_PAIRS = HALF / 2;
@@ -55,7 +58,7 @@ module param_filter
                     lower_next[i] = lower_ff[i-1];
                 else begin
                     if (i == 1)
-                        lower_next[i] = '0;
+                        lower_next[i] = saved_prev;//'0;
                     else
                         lower_next[i] = lower_ff[i-2];
                 end
@@ -70,7 +73,7 @@ module param_filter
     //Содержит регистры upper_ff[0..HALF-1]
         if (reset_i) begin
             for (int i = 0; i < HALF; i++) upper_ff[i] <= '0;
-        end else if (enable_i) begin
+        end else if (enable) begin
             upper_ff <= upper_next;
         end
     end: p_upper
@@ -78,7 +81,7 @@ module param_filter
     always_ff @(posedge clk_i) begin: p_lower //регистровый слой нижней линии задержки
         if (reset_i) begin
             for (int i = 0; i < HALF-1; i++) lower_ff[i] <= '0;
-        end else if (enable_i) begin
+        end else if (enable) begin
             lower_ff <= lower_next;
         end
     end: p_lower
@@ -87,7 +90,7 @@ module param_filter
     //Сохранённое значение saved_prev используется в режиме N/2 для левого нижнего мультиплексора
         if (reset_i) begin
             saved_prev <= '0;
-        end else if (!enable_i) begin   // сохраняем только когда enable = 0
+        end else if (enable_i&order_sel_i&(!strob_i)) begin  
             saved_prev <= signal_i;
         end
     end
@@ -112,22 +115,22 @@ module param_filter
     //выбирает коэффициенты в соответствии с режимом
     //раскладывает сэмплы и коэффициенты для четырёх деревьев сумматоров
         //Верхняя линия
-        samp_upper[0] = signal_i;
-        for (int k = 1; k < HALF; k++) begin
-            samp_upper[k] = upper_next[k];
+       // samp_upper[0] = signal_i;
+        for (int k = 0; k < HALF; k++) begin
+            samp_upper[k] = upper_ff[k];
         end
     
         //Нижняя линия
-        samp_lower[0] = lower_next[0];
-        for (int k = 1; k < HALF-1; k++) begin
-            samp_lower[k] = lower_next[k];
+        //samp_lower[0] = lower_next[0];
+        for (int k = 0; k < HALF-1; k++) begin
+            samp_lower[k] = lower_ff[k];
         end
     
         //На последний умножитель
         if (order_sel_i == '0)
             samp_lower[HALF-1] = lower_ff[HALF-2];
         else
-            samp_lower[HALF-1] = '0;
+            samp_lower[HALF-1] = lower_ff[HALF-2];
     
         for (int k = 0; k < HALF; k++) begin
             if (order_sel_i == '0) begin
@@ -166,7 +169,7 @@ module param_filter
         for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_ue //умножители для верхней ветви, чётные сэмплы
             multiplier16 u_mult (
                 .clk_i   (clk_i),
-                .enable_i(enable_i),
+                .enable_i(enable),
                 .reset_i (reset_i),
                 .a_i     (tree_in_ue[k][15:0]),
                 .b_i     (coef_ue[k]),
@@ -176,7 +179,7 @@ module param_filter
         for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_uo //умножители для верхней ветви, нечётные сэмплы
             multiplier16 u_mult (
                 .clk_i   (clk_i),
-                .enable_i(enable_i),
+                .enable_i(enable),
                 .reset_i (reset_i),
                 .a_i     (tree_in_uo[k][15:0]),
                 .b_i     (coef_uo[k]),
@@ -186,7 +189,7 @@ module param_filter
         for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_le //умножители для нижней ветви, чётные сэмплы
             multiplier16 u_mult (
                 .clk_i   (clk_i),
-                .enable_i(enable_i),
+                .enable_i(enable),
                 .reset_i (reset_i),
                 .a_i     (tree_in_le[k][15:0]),
                 .b_i     (coef_le[k]),
@@ -196,7 +199,7 @@ module param_filter
         for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_lo //умножители для нижней ветви, нечётные сэмплы
             multiplier16 u_mult (
                 .clk_i   (clk_i),
-                .enable_i(enable_i),
+                .enable_i(enable),
                 .reset_i (reset_i),
                 .a_i     (tree_in_lo[k][15:0]),
                 .b_i     (coef_lo[k]),
@@ -228,7 +231,7 @@ module param_filter
             .LEVEL(0)
         ) u_tree_ue (
             .clk_i    (clk_i),
-            .enable_i (enable_i),
+            .enable_i (enable),
             .reset_i  (reset_i),
             .inputs_i (prod_ue),
             .summ_o   (sum_ue)
@@ -240,7 +243,7 @@ module param_filter
             .LEVEL(0)
         ) u_tree_uo (
             .clk_i    (clk_i),
-            .enable_i (enable_i),
+            .enable_i (enable),
             .reset_i  (reset_i),
             .inputs_i (prod_uo),
             .summ_o   (sum_uo)
@@ -252,7 +255,7 @@ module param_filter
             .LEVEL(0)
         ) u_tree_le (
             .clk_i    (clk_i),
-            .enable_i (enable_i),
+            .enable_i (enable),
             .reset_i  (reset_i),
             .inputs_i (prod_le),
             .summ_o   (sum_le)
@@ -264,7 +267,7 @@ module param_filter
             .LEVEL(0)
         ) u_tree_lo (
             .clk_i    (clk_i),
-            .enable_i (enable_i),
+            .enable_i (enable),
             .reset_i  (reset_i),
             .inputs_i (prod_lo),
             .summ_o   (sum_lo)
@@ -280,7 +283,7 @@ module param_filter
     ) u_delay_order (
         .reset_i  (reset_i),
         .clk_i    (clk_i),
-        .enable_i (enable_i),
+        .enable_i (enable),
         .signal_i (order_sel_i),
         .signal_o (order_sel_delayed)
     );
@@ -297,8 +300,8 @@ module param_filter
             y_current_next = sum_ue + sum_uo + sum_le + sum_lo;
             y_prev_next    = '0;
         end else begin
-            y_current_next = sum_ue + sum_uo;
-            y_prev_next    = sum_le + sum_lo; 
+            y_current_next = sum_ue + sum_lo;
+            y_prev_next    = sum_le + sum_uo; 
         end
     end: c_final_sum
 
@@ -306,7 +309,7 @@ module param_filter
         if (reset_i) begin
             y_current_ff <= '0;
             y_prev_ff    <= '0;
-        end else if (enable_i) begin
+        end else if (enable) begin
             y_current_ff <= y_current_next;
             y_prev_ff    <= y_prev_next;
         end
@@ -323,7 +326,7 @@ module param_filter
     end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_phase_ff == '0) ? y_prev_ff : y_current_ff;
+    assign psc_out = (psc_phase_ff == '0) ? y_current_ff : y_prev_ff;
 
     logic signed [BITS_W-1:0] signal_o_n_ff;
     logic signed [BITS_W-1:0] signal_o_n2_ff;
@@ -331,7 +334,7 @@ module param_filter
     always_ff @(posedge clk_i) begin: p_out_n
         if (reset_i) begin
             signal_o_n_ff <= '0;
-        end else if (enable_i) begin
+        end else if (enable) begin
             signal_o_n_ff <= y_current_ff;
         end
     end: p_out_n
