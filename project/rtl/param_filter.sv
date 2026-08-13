@@ -24,8 +24,8 @@ module param_filter
     
     logic signed [BITS_W-1:0] upper_ff  [0:HALF-1];
     logic signed [BITS_W-1:0] upper_next [0:HALF-1];
-    logic signed [BITS_W-1:0] lower_ff  [0:HALF-2];
-    logic signed [BITS_W-1:0] lower_next [0:HALF-2];
+    logic signed [BITS_W-1:0] lower_ff  [0:HALF-1];
+    logic signed [BITS_W-1:0] lower_next [0:HALF-1];
     logic signed [BITS_W-1:0] saved_prev; 
      
     always_comb begin: c_shift_logic     //логика сдвига с мультиплексорами в линиях задержки
@@ -51,7 +51,7 @@ module param_filter
         else
             lower_next[0] = saved_prev;
     
-        for (int i = 1; i < HALF-1; i++) begin
+        for (int i = 1; i < HALF; i++) begin
             if ((i % 2) == 1) begin   // нечётные
                 // mux перед регистром
                 if (order_sel_i == '0)
@@ -128,7 +128,7 @@ module param_filter
     
         //На последний умножитель
         if (order_sel_i == '0)
-            samp_lower[HALF-1] = lower_ff[HALF-2];
+            samp_lower[HALF-1] = lower_ff[HALF-1];
         else
             samp_lower[HALF-1] = lower_ff[HALF-2];
     
@@ -288,24 +288,113 @@ module param_filter
         .signal_o (order_sel_delayed)
     );
 
+    logic signed [BITS_W-1:0] zero;
+    assign zero = '0;
+    
+    logic signed [BITS_W-1:0] pair_a_b;
+    logic signed [BITS_W-1:0] pair_b_b;
+    
+    always_comb begin
+        if (order_sel_delayed == '0) begin
+            pair_a_b = sum_uo;
+            pair_b_b = sum_lo;
+        end else begin
+            pair_a_b = sum_lo;
+            pair_b_b = sum_uo;
+        end
+    end
+    
+    logic signed [BITS_W-1:0] stage1_a;
+    logic signed [BITS_W-1:0] stage1_b;
+    
+    adder #(.N(BITS_W)) u_add_stage1_a (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (sum_ue),
+        .b_i     (pair_a_b),
+        .summ    (stage1_a)
+    );
+    
+    adder #(.N(BITS_W)) u_add_stage1_b (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (sum_le),
+        .b_i     (pair_b_b),
+        .summ    (stage1_b)
+    );
+    
+    logic signed [BITS_W-1:0] order_sel_stage1;
+    logic signed [BITS_W-1:0] order_sel_ext;
+    assign order_sel_ext = $signed({{(BITS_W-1){1'b0}}, order_sel_delayed});
+    
+    adder #(.N(BITS_W)) u_delay_order_stage1 (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (order_sel_ext),
+        .b_i     (zero),
+        .summ    (order_sel_stage1)
+    );
+    
+    logic signed [BITS_W-1:0] stage2_b_current;
+    always_comb begin
+        if (order_sel_stage1[0] == 1'b0)
+            stage2_b_current = stage1_b;
+        else
+            stage2_b_current = zero;
+    end
+    
+    logic signed [BITS_W-1:0] y_current_raw;
+    logic signed [BITS_W-1:0] y_prev_raw;
+    
+    adder #(.N(BITS_W)) u_add_current (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (stage1_a),
+        .b_i     (stage2_b_current),
+        .summ    (y_current_raw)
+    );
+    
+    adder #(.N(BITS_W)) u_add_prev (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (stage1_b),
+        .b_i     (zero),
+        .summ    (y_prev_raw)
+    );
+    
+    logic signed [BITS_W-1:0] order_sel_final;
+    
+    adder #(.N(BITS_W)) u_delay_order_final (
+        .clk_i   (clk_i),
+        .enable_i(enable),
+        .reset_i (reset_i),
+        .a_i     (order_sel_stage1),
+        .b_i     (zero),
+        .summ    (order_sel_final)
+    );
+    
     logic signed [BITS_W-1:0] y_current_next;
     logic signed [BITS_W-1:0] y_prev_next;
-    logic signed [BITS_W-1:0] y_current_ff;
-    logic signed [BITS_W-1:0] y_prev_ff;
-
-    always_comb begin: c_final_sum //Итоговое суммирование фаз
-    //в режиме N складываются все четыре дерева, вторая фаза обнуляется
-    //в режиме N/2 верхние два дерева формируют текущую фазу, нижние два предыдущую
-        if (order_sel_delayed == '0) begin
-            y_current_next = sum_ue + sum_uo + sum_le + sum_lo;
+    
+    always_comb begin
+        if (order_sel_final[0] == 1'b0) begin
+            y_current_next = y_current_raw;
             y_prev_next    = '0;
         end else begin
-            y_current_next = sum_ue + sum_lo;
-            y_prev_next    = sum_le + sum_uo; 
+            y_current_next = y_current_raw;
+            y_prev_next    = y_prev_raw;
         end
-    end: c_final_sum
-
-    always_ff @(posedge clk_i) begin: p_final_regs //выходные регистры
+    end
+    
+    logic signed [BITS_W-1:0] y_current_ff;
+    logic signed [BITS_W-1:0] y_prev_ff;
+    
+    always_ff @(posedge clk_i) begin: p_final_regs
         if (reset_i) begin
             y_current_ff <= '0;
             y_prev_ff    <= '0;
@@ -326,7 +415,7 @@ module param_filter
     end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_phase_ff == '0) ? y_current_ff : y_prev_ff;
+    assign psc_out = (psc_phase_ff == '0) ?  y_prev_ff : y_current_ff;
 
     logic signed [BITS_W-1:0] signal_o_n_ff;
     logic signed [BITS_W-1:0] signal_o_n2_ff;
