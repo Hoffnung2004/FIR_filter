@@ -80,7 +80,7 @@ module param_filter
     
     always_ff @(posedge clk_i) begin: p_lower //регистровый слой нижней линии задержки
         if (reset_i) begin
-            for (int i = 0; i < HALF-1; i++) lower_ff[i] <= '0;
+            for (int i = 0; i < HALF; i++) lower_ff[i] <= '0;
         end else if (enable) begin
             lower_ff <= lower_next;
         end
@@ -415,7 +415,7 @@ module param_filter
     end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_phase_ff == '0) ?  y_prev_ff : y_current_ff;
+    assign psc_out = (psc_phase_ff == '0) ? y_current_ff : y_prev_ff;
 
     logic signed [BITS_W-1:0] signal_o_n_ff;
     logic signed [BITS_W-1:0] signal_o_n2_ff;
