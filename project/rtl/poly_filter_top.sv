@@ -89,15 +89,18 @@ module poly_filter_top
     
     fifo #( // Каждый такт - отсчёт
         .BITS_W(16),
+        .IMPORTANT_BITS_W(1),
         .POW(4)
     ) fifo_in (
         .clk_i(clk_i),
         .reset_i(reset_i),
         .enable_i(enable_i),
         .data_i(data_i),
+        .important_i(order_sel_i),
         .valid_i(valid_i),
         .ready_i(ready_i),
         .data_o(fifo_out),
+        .important_o(order_sel),
         .valid_o(enable),
         .ready_o(ready_o | !out_valid)
     );
@@ -162,7 +165,7 @@ module poly_filter_top
         .clk_i(clk_i),
         .enable_i(clk_P),
         .strob_i(clk_2P),
-        .order_sel_i(order_sel_i),
+        .order_sel_i(order_sel),
         .signal_i(phase_in),
         .h_i(h),
         .signal_o(phase_out)
@@ -192,7 +195,7 @@ module poly_filter_top
     end
     
     always_comb begin
-        case({order_sel_i,order_sel_old})
+        case({order_sel,order_sel_old})
             2'b00: valid_next = valid_counter;
             2'b01: valid_next = -DELAY-TAPS_PER_PHASE;
             2'b10: valid_next = -DELAY_HALF_N-TAPS_PER_PHASE; 
@@ -202,31 +205,31 @@ module poly_filter_top
     
     always_ff @(posedge clk_i) begin
         if(reset_i) begin
-            order_sel_old<=order_sel_i;
+            order_sel_old<=order_sel;
             reconf<=1'b0;
         end else if(clk_P) begin
-            reconf<=(order_sel_old^order_sel_i);
-            order_sel_old<=order_sel_i;
+            reconf<=(order_sel_old^order_sel);
+            order_sel_old<=order_sel;
         end
     end
 
     
     always_ff @(posedge clk_i) begin
         if(reset_i) begin
-            if(order_sel_i) valid_counter<=-DELAY_HALF_N-1;
+            if(order_sel) valid_counter<=-DELAY_HALF_N-1;
             else valid_counter<=-DELAY-1;
             valid_counter_after<=0;
         end else if(clk_P) begin 
             if(valid_counter<0) valid_counter<=valid_counter+1;
             else valid_counter<=valid_next;
             if(valid_counter_after<0) valid_counter_after<=valid_counter_after+1;
-            else if(order_sel_i^order_sel_old) valid_counter_after<=-DELAY_AFTER;
+            else if(order_sel^order_sel_old) valid_counter_after<=-DELAY_AFTER;
         end
     end
     
     always_ff @(posedge clk_i) begin
         
-        if(reset_i | (order_sel_i^order_sel_old)) begin
+        if(reset_i | (order_sel^order_sel_old)) begin
             for(int i=0; i<4; i++) valid_delay[i]<=1'b0;
             for(int i=0; i<4; i++) valid_delay_after[i]<=1'b0;
         end else if(clk_P) begin 
@@ -238,7 +241,7 @@ module poly_filter_top
     end
     assign out_valid = valid_delay[1];
     assign out_valid_after = valid_delay_after[0];
-    assign valid_o = enable & (out_valid | out_valid_after | (order_sel_i^order_sel_old) | reconf);
+    assign valid_o = enable & (out_valid | out_valid_after | (order_sel^order_sel_old) | reconf);
     
     
 endmodule

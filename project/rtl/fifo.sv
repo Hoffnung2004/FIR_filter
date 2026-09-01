@@ -1,6 +1,7 @@
 module fifo
 #(
     parameter BITS_W = 16,
+    parameter IMPORTANT_BITS_W = 1,
     parameter POW = 4,
     localparam SIZE = 1<<POW,
     localparam MAX_INF = SIZE*3/4
@@ -10,10 +11,12 @@ module fifo
     input logic enable_i,
     
     input logic [BITS_W-1:0] data_i,
+    input logic [IMPORTANT_BITS_W-1:0] important_i,
     input logic valid_i,
     output logic ready_i,
     
     output logic [BITS_W-1:0] data_o,
+    output logic [IMPORTANT_BITS_W-1:0] important_o,
     output logic valid_o,
     input logic ready_o
     );
@@ -21,6 +24,7 @@ module fifo
     logic handshacke_out;
     
     logic [BITS_W-1:0] memory_ff [0:SIZE-1];
+    logic [IMPORTANT_BITS_W-1:0] important_ff [0:SIZE-1];
     logic [POW-1:0] addr_in_ff;
     logic [POW-1:0] addr_out_ff;
     
@@ -28,6 +32,7 @@ module fifo
     
     assign addr_delta = addr_in_ff - addr_out_ff;
     assign data_o = memory_ff[addr_out_ff];
+    assign important_o = important_ff[addr_out_ff];
     
     always_comb begin
         if(addr_delta<MAX_INF) begin
@@ -52,6 +57,7 @@ module fifo
         end else begin
             if(handshacke_in) begin
                 memory_ff[addr_in_ff]<=data_i;
+                important_ff[addr_in_ff]<=important_i;
                 addr_in_ff <= addr_in_ff + 1;
             end
                 
