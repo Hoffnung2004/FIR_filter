@@ -2,12 +2,14 @@
 
 module polyphase#(
     parameter int P = 3,        // Число фаз 
-    parameter int TAPS_PER_PHASE  = 8, // Число тапсов на фазу
+    parameter int TAPS_PER_PHASE  = 8, // Число тапсов на фазу (строго кратно 4-ём)
     parameter BITS_W = 40 // (32/5+$clog2(TAPS_PER_PHASE*P)/5)*8 делю на 5 вместо 8, чтобы округлить вверх
 )(
     input logic reset_i,
     input logic clk_i,
     input logic enable_i,
+    input logic strob_i,
+    input logic order_sel_i,
     input logic signed [15:0] signal_i [0:P-1],
     input logic signed [15:0] h_i [0:P-1][0:TAPS_PER_PHASE-1],
     output logic signed [BITS_W-1:0] signal_o [0:P-1]
@@ -53,10 +55,12 @@ module polyphase#(
                  param_filter #(
                     .N(TAPS_PER_PHASE),
                     .BITS_W(BITS_W)
-                    )(
+                    ) filter (
                     .reset_i(reset_i),
                     .clk_i(clk_i),
                     .enable_i(enable_i),
+                    .strob_i(strob_i),
+                    .order_sel_i(order_sel_i),
                     .signal_i(filter_in[phase_out][taps]),
                     .taps_i(h_i[taps]),
                     .signal_o(filter_out[phase_out][taps])
@@ -75,7 +79,7 @@ module polyphase#(
             .reset_i(reset_i),
             .clk_i(clk_i),
             .enable_i(enable_i),
-            .inputs_i(delay_out[phase_out]),
+            .inputs_i(to_adders[phase_out]),
             .summ_o(signal_o[phase_out])
     );
         end

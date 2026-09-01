@@ -409,13 +409,13 @@ module param_filter
     always_ff @(posedge clk_i) begin: p_psc_phase //фазовый триггер, переключается на каждом такте clk_i
         if (reset_i) begin
             psc_phase_ff <= '0;
-        end else begin
+        end else if (enable_i) begin
             psc_phase_ff <= ~psc_phase_ff;
         end
     end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_phase_ff == '0) ? y_current_ff : y_prev_ff;
+    assign psc_out = (psc_phase_ff == '0) ? y_prev_ff : y_current_ff;
 
     logic signed [BITS_W-1:0] signal_o_n_ff;
     logic signed [BITS_W-1:0] signal_o_n2_ff;

@@ -36,7 +36,8 @@ module coeff_storage_core #(
     end : p_parameter_check
 
     // Новая ИХ загружается в теневой банк.
-    logic signed [COEFF_WIDTH-1:0] shadow_bank_ff [0:PHASE_NUM-1][0:TAPS_PER_PHASE-1];
+    logic signed [COEFF_WIDTH-1:0] shadow_bank_ff [0:PHASE_NUM*TAPS_PER_PHASE-1];
+    logic signed [COEFF_WIDTH-1:0] shadow_bank [0:PHASE_NUM-1][0:TAPS_PER_PHASE-1];
 
     // Из активного банка коэффициенты получает фильтр.
     logic signed [COEFF_WIDTH-1:0] active_bank_ff [0:PHASE_NUM-1][0:TAPS_PER_PHASE-1];
@@ -67,10 +68,18 @@ module coeff_storage_core #(
 
     // Запись новой ИХ в shadow bank.
     always_ff @(posedge clk_i) begin : p_shadow_bank
-        if (wr_ena_i && wr_addr_valid && !busy_ff) begin
-            shadow_bank_ff[wr_phase_id][wr_tap_id] <= wr_data_i;
+        if(reset_i) begin
+            for(int i=0; i<PHASE_NUM*TAPS_PER_PHASE; i++) begin
+                shadow_bank_ff[i]<=16'b1; // only to debug
+            end
+        end else if (wr_ena_i && wr_addr_valid && !busy_ff) begin
+            shadow_bank_ff[wr_addr_value] <= wr_data_i;
         end
     end : p_shadow_bank
+    
+    for(genvar addr=0; addr<TOTAL_COEFF_NUM; addr++) begin
+        assign shadow_bank[addr%PHASE_NUM][addr/PHASE_NUM]=shadow_bank_ff[addr];
+    end
 
     // Управление последовательным переносом коэффициентов.
     always_ff @(posedge clk_i) begin : p_update_controller
@@ -103,9 +112,16 @@ module coeff_storage_core #(
 
     // За один enable_i обновляется один tap сразу для всех фаз.
     always_ff @(posedge clk_i) begin : p_active_bank
-        if (busy_ff && enable_i) begin
+        if(reset_i) begin
+            for(int i=0; i<PHASE_NUM; i++) begin
+                for(int j=0; j<TAPS_PER_PHASE; j++) begin
+                    active_bank_ff[i][j]<=16'b0; // only to debug
+                end
+            end
+
+        end else if (busy_ff && enable_i) begin
             for (int phase_id = 0; phase_id < PHASE_NUM; phase_id++) begin
-                active_bank_ff[phase_id][tap_cnt_ff] <= shadow_bank_ff[phase_id][tap_cnt_ff];
+                active_bank_ff[phase_id][tap_cnt_ff] <= shadow_bank[phase_id][tap_cnt_ff];
             end
         end
     end : p_active_bank
