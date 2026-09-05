@@ -26,6 +26,7 @@ module coeff_storage_axi_lite_tb;
     logic reset_i;
     logic clk_i;
     logic enable_i;
+    logic apply_all_i;
 
     logic [AXI_ADDR_WIDTH-1:0] s_axi_awaddr;
     logic [2:0] s_axi_awprot;
@@ -291,6 +292,7 @@ module coeff_storage_axi_lite_tb;
         clk_i = 1'b0;
         reset_i = 1'b1;
         enable_i = 1'b0;
+        apply_all_i = 1'b0;
 
         s_axi_awaddr = '0;
         s_axi_awprot = '0;
@@ -515,6 +517,7 @@ module coeff_storage_axi_lite_tb;
         .reset_i(reset_i),
         .clk_i(clk_i),
         .enable_i(enable_i),
+        .apply_all_i(apply_all_i),
 
         .s_axi_awaddr(s_axi_awaddr),
         .s_axi_awprot(s_axi_awprot),

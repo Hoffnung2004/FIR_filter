@@ -51,6 +51,31 @@ module poly_filter_top
     input logic reset_i,
     input logic enable_i,
     input logic order_sel_i,
+    input logic apply_all_i,
+
+    input logic [5:0] s_axi_awaddr,
+    input logic [2:0] s_axi_awprot,
+    input logic s_axi_awvalid,
+    output logic s_axi_awready,
+
+    input logic [31:0] s_axi_wdata,
+    input logic [3:0] s_axi_wstrb,
+    input logic s_axi_wvalid,
+    output logic s_axi_wready,
+
+    output logic [1:0] s_axi_bresp,
+    output logic s_axi_bvalid,
+    input logic s_axi_bready,
+
+    input logic [5:0] s_axi_araddr,
+    input logic [2:0] s_axi_arprot,
+    input logic s_axi_arvalid,
+    output logic s_axi_arready,
+
+    output logic [31:0] s_axi_rdata,
+    output logic [1:0] s_axi_rresp,
+    output logic s_axi_rvalid,
+    input logic s_axi_rready,
     
     input logic [15:0] data_i,
     input logic valid_i,
@@ -58,15 +83,23 @@ module poly_filter_top
     
     output logic [BITS_W-1:0] data_o,
     output logic valid_o,
-    input logic ready_o
+    input logic ready_o,
+
+    output logic busy_o,
+    output logic done_o
     );
     
     logic enable;
     logic module_enable;
     logic [15:0] fifo_out;
-    logic [15:0] h [0:P-1][0:TAPS_PER_PHASE-1];
+    logic signed [15:0] h [0:P-1][0:TAPS_PER_PHASE-1];
+
     logic [15:0] phase_in [0:P-1];
+    logic signed [15:0] phase_in_signed [0:P-1];
+
+    logic signed [BITS_W-1:0] phase_out_signed [0:P-1];
     logic [BITS_W-1:0] phase_out [0:P-1];
+
     logic clk_P;
     logic clk_2P;
     logic [BITS_W-1:0] pre_out;
@@ -83,6 +116,13 @@ module poly_filter_top
     logic valid_delay_after [0:3];
     logic order_sel_old;
     logic reconf;
+
+    generate
+        for(genvar phase_id = 0; phase_id < P; phase_id++) begin
+            assign phase_in_signed[phase_id] = $signed(phase_in[phase_id]);
+            assign phase_out[phase_id] = $unsigned(phase_out_signed[phase_id]);
+        end
+    endgenerate
     
     assign module_enable=enable&(ready_o | !out_valid);
     assign pre_valid = valid_counter==0;
@@ -115,30 +155,31 @@ module poly_filter_top
         .reset_i(reset_i),
         .clk_i(clk_i),
         .enable_i(enable_i),
+        .apply_all_i(apply_all_i),
 
-        .s_axi_awaddr(), // [AXI_ADDR_WIDTH-1:0]
-        .s_axi_awprot(), // [2:0]
-        .s_axi_awvalid(),
-        .s_axi_awready(),
+        .s_axi_awaddr(s_axi_awaddr), // [AXI_ADDR_WIDTH-1:0]
+        .s_axi_awprot(s_axi_awprot), // [2:0]
+        .s_axi_awvalid(s_axi_awvalid),
+        .s_axi_awready(s_axi_awready),
 
-        .s_axi_wdata(), // [AXI_DATA_WIDTH-1:0]
-        .s_axi_wstrb(), // [AXI_DATA_WIDTH/8-1:0]
-        .s_axi_wvalid(),
-        .s_axi_wready(),
-        .s_axi_bresp(), // [1:0]
-        .s_axi_bvalid(),
-        .s_axi_bready(),
-        .s_axi_araddr(), // [AXI_ADDR_WIDTH-1:0]
-        .s_axi_arprot(), // [2:0]
-        .s_axi_arvalid(),
-        .s_axi_arready(),
-        .s_axi_rdata(), //[AXI_DATA_WIDTH-1:0]
-        .s_axi_rresp(), // [1:0]
-        .s_axi_rvalid(),
-        .s_axi_rready(),
+        .s_axi_wdata(s_axi_wdata), // [AXI_DATA_WIDTH-1:0]
+        .s_axi_wstrb(s_axi_wstrb), // [AXI_DATA_WIDTH/8-1:0]
+        .s_axi_wvalid(s_axi_wvalid),
+        .s_axi_wready(s_axi_wready),
+        .s_axi_bresp(s_axi_bresp), // [1:0]
+        .s_axi_bvalid(s_axi_bvalid),
+        .s_axi_bready(s_axi_bready),
+        .s_axi_araddr(s_axi_araddr), // [AXI_ADDR_WIDTH-1:0]
+        .s_axi_arprot(s_axi_arprot), // [2:0]
+        .s_axi_arvalid(s_axi_arvalid),
+        .s_axi_arready(s_axi_arready),
+        .s_axi_rdata(s_axi_rdata), //[AXI_DATA_WIDTH-1:0]
+        .s_axi_rresp(s_axi_rresp), // [1:0]
+        .s_axi_rvalid(s_axi_rvalid),
+        .s_axi_rready(s_axi_rready),
         .coeff_o(h),
-        .busy_o(),
-        .done_o()
+        .busy_o(busy_o),
+        .done_o(done_o)
     );
     
     
@@ -166,9 +207,9 @@ module poly_filter_top
         .enable_i(clk_P),
         .strob_i(clk_2P),
         .order_sel_i(order_sel),
-        .signal_i(phase_in),
+        .signal_i(phase_in_signed),
         .h_i(h),
-        .signal_o(phase_out)
+        .signal_o(phase_out_signed)
     );
     
     serdes_out#(

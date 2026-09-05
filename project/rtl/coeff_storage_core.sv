@@ -12,6 +12,7 @@ module coeff_storage_core #(
     input logic clk_i,
     input logic enable_i,
     input logic apply_i,
+    input logic apply_all_i,
 
     input logic wr_ena_i,
     input logic [COEFF_ADDR_WIDTH-1:0] wr_addr_i,
@@ -92,7 +93,7 @@ module coeff_storage_core #(
             done_ff <= 1'b0;
 
             if (!busy_ff) begin
-                if (apply_i) begin
+                if (apply_i && !apply_all_i) begin
                     tap_cnt_ff <= '0;
                     busy_ff <= 1'b1;
                 end
@@ -116,6 +117,14 @@ module coeff_storage_core #(
             for(int i=0; i<PHASE_NUM; i++) begin
                 for(int j=0; j<TAPS_PER_PHASE; j++) begin
                     active_bank_ff[i][j]<=16'b0; // only to debug
+                end
+            end
+
+        end else if (apply_all_i && !busy_ff && !apply_i && !wr_ena_i) begin
+            for (int phase_id = 0; phase_id < PHASE_NUM; phase_id++) begin
+                for (int tap_id = 0; tap_id < TAPS_PER_PHASE; tap_id++) begin
+                    active_bank_ff[phase_id][tap_id]
+                        <= shadow_bank[phase_id][tap_id];
                 end
             end
 

@@ -13,6 +13,7 @@ module coeff_storage_axi_lite #(
     input logic reset_i,
     input logic clk_i,
     input logic enable_i,
+    input logic apply_all_i,
 
     input logic [AXI_ADDR_WIDTH-1:0] s_axi_awaddr,
     input logic [2:0] s_axi_awprot,
@@ -190,7 +191,7 @@ module coeff_storage_axi_lite #(
                     end
 
                     REG_COEFF_DATA: begin
-                        if (coeff_data_strobe_valid && !storage_busy) begin
+                        if (coeff_data_strobe_valid && !storage_busy && !apply_all_i) begin
                             wr_data_core <= $signed(wdata_ff[COEFF_WIDTH-1:0]);
                             wr_ena_core <= 1'b1;
                         end
@@ -202,7 +203,7 @@ module coeff_storage_axi_lite #(
                     REG_CONTROL: begin
                         if (wstrb_ff[0]) begin
                             if (wdata_ff[0]) begin
-                                if (!storage_busy) begin
+                                if (!storage_busy && !apply_all_i) begin
                                     apply_core <= 1'b1;
                                     done_status_ff <= 1'b0;
                                 end
@@ -275,6 +276,7 @@ module coeff_storage_axi_lite #(
         .clk_i(clk_i),
         .enable_i(enable_i),
         .apply_i(apply_core),
+        .apply_all_i(apply_all_i),
 
         .wr_ena_i(wr_ena_core),
         .wr_addr_i(wr_addr_core),
