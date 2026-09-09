@@ -4,7 +4,7 @@ module poly_filter_top_mini_tb;
 
     // Параметры
     parameter int P = 2;
-    parameter int TAPS_PER_PHASE = 4;
+    parameter int TAPS_PER_PHASE = 16;
     parameter int BITS_W = fir_pkg::bits_sum(TAPS_PER_PHASE, P);
 
     localparam int TOTAL_COEFF_NUM = P * TAPS_PER_PHASE;
@@ -12,6 +12,23 @@ module poly_filter_top_mini_tb;
     localparam logic [5:0] REG_COEFF_ADDR = 6'h00;
     localparam logic [5:0] REG_COEFF_DATA = 6'h04;
     localparam logic [5:0] REG_CONTROL    = 6'h08;
+
+    // Коэффициенты фильтра из тестов GOLDмодели
+    localparam logic signed [15:0] COEFF[0:31] = '{
+        183,    280,   56,   -481,
+       -946,   -572,   801,   2279,
+        2107,  -632,  -4584, -6059,
+       -1439,  9753,  23395, 32767,
+        32767, 23395,  9753, -1439,
+       -6059, -4584,  -632,   2107,
+        2279,   801,   -572,  -946,
+       -481,    56,    280,   183
+    };
+
+    // Файлы тестовых данных GOLDмодели
+    localparam string FILE_DIR = "../../../../fir_filter_project.ip_user_files/mem_init_files/";
+    localparam int TEST_NUM = 4;          // номер теста!!!
+    localparam int REF_SKIP = 3;          //подбирается под конфигурацию(для P = 8 TAPS_PER_PHASE = 4 равен 15, для P = 4 TAPS_PER_PHASE = 8 равен 7, для P = 2 TAPS_PER_PHASE = 16 равен 3)
 
     // Сигналы top-модуля
     logic clk_i;
@@ -52,6 +69,9 @@ module poly_filter_top_mini_tb;
     logic valid_o;
     logic ready_o;
 
+    logic signed [BITS_W-1:0] ref_data_o;
+    logic [31:0] mismatch_cnt_wave;
+
     logic busy_o;
     logic done_o;
 
@@ -63,21 +83,11 @@ module poly_filter_top_mini_tb;
         forever #5 clk_i = ~clk_i;
     end
 
-    // Наборы коэффициентов для проверки
     function automatic logic signed [15:0] coeff_value(
         input int set_id,
         input int addr
     );
-        int value;
-
-        begin
-            value = 100 + set_id * 1000 + addr;
-
-            if (addr % 2 == 0)
-                coeff_value = value;
-            else
-                coeff_value = -value;
-        end
+        coeff_value = COEFF[addr];
     endfunction
 
     // Запись одного регистра через AXI4-Lite
@@ -244,6 +254,8 @@ module poly_filter_top_mini_tb;
         data_i = '0;
         valid_i = 1'b0;
         ready_o = 1'b1;
+        ref_data_o = '0;
+        mismatch_cnt_wave = '0;
 
         s_axi_awaddr = '0;
         s_axi_awprot = '0;
@@ -347,16 +359,96 @@ module poly_filter_top_mini_tb;
 
         check_coefficients(1);
 
+        $display("========================================");
+        $display("Starting data flow test (test %0d)...", TEST_NUM);
+        begin
+            string file_in, file_out;
+            integer fd_in, fd_out;
+            integer mismatch_cnt;
+            integer total_compared;
+            logic signed [15:0] data_in;
+            logic signed [BITS_W-1:0] data_out_ref;
+
+            // Формируем имена файлов
+            $sformat(file_in,  "%stest%0d_in.txt",  FILE_DIR, TEST_NUM);
+            $sformat(file_out, "%stest%0d_out.txt", FILE_DIR, TEST_NUM);
+            fd_in  = $fopen(file_in,  "r");
+            fd_out = $fopen(file_out, "r");
+
+            if (!fd_in || !fd_out) begin
+                $display("ERROR: Cannot open test files for test %0d", TEST_NUM);
+                error_count++;
+            end else begin
+                // Включаем потоковую передачу
+                enable_i = 1'b1;
+                valid_i  = 1'b1;
+                ready_o  = 1'b1;
+
+                mismatch_cnt = 0;
+                total_compared = 0;
+                mismatch_cnt_wave <= 0;
+
+                // Пропускаем REF_SKIP эталонных отсчётов
+                for (int skip = 0; skip < REF_SKIP; skip++) begin
+                    if ($fscanf(fd_out, "%d", data_out_ref) != 1) begin
+                        $display("Warning: not enough reference data to skip %0d samples", REF_SKIP);
+                        break;
+                    end
+                end
+
+                while (!$feof(fd_in)) begin
+                    @(posedge clk_i);
+                    if ($fscanf(fd_in, "%d", data_in) == 1) begin
+                        data_i = data_in;
+                    end else begin
+                        break;
+                    end
+
+                    // Когда выход валиден, читаем эталон и сравниваем
+                    if (valid_o) begin
+                        if ($fscanf(fd_out, "%d", data_out_ref) == 1) begin
+                            ref_data_o <= data_out_ref;
+                            #1;
+                            total_compared++;
+                            if (data_o !== data_out_ref) begin
+                                mismatch_cnt++;
+                                mismatch_cnt_wave <= mismatch_cnt;
+                                if (mismatch_cnt <= 5)
+                                    $display("Mismatch at sample %0d: expected %0d, got %0d",
+                                             total_compared-1, data_out_ref, data_o);
+                            end
+                        end else begin
+                            $display("Warning: reference file ended before data.");
+                            break;
+                        end
+                    end
+                end
+                $fclose(fd_in);
+                $fclose(fd_out);
+
+                $display("Data flow test finished: compared %0d samples, mismatches = %0d",
+                         total_compared, mismatch_cnt);
+                if (mismatch_cnt != 0) begin
+                    $display("DATA FLOW TEST FAILED");
+                    error_count += mismatch_cnt;
+                end else begin
+                    $display("DATA FLOW TEST PASSED");
+                end
+            end
+        end
+        $display("========================================");
+
         // Результат проверки
         if (error_count == 0) begin
-            $display("TEST PASSED");
+            $display("ALL TESTS PASSED");
             $display("00 - no command           OK");
             $display("01 - apply_all             OK");
             $display("10 - sequential apply      OK");
             $display("11 - forbidden combination OK");
+            $display("Data flow test             OK");
         end
         else begin
-            $fatal(1, "TEST FAILED: %0d errors", error_count);
+            $fatal(1, "TEST FAILED: %0d total errors", error_count);
         end
 
         $finish;
