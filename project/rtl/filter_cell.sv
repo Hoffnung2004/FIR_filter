@@ -4,22 +4,22 @@ module filter_cell #(
     parameter int ADDEND_WIDTH   = 40,
     parameter int RESULT_WIDTH   = 40
 )(
-    input  logic signed [FACTOR_0_WIDTH-1:0] i_factor_0,
-    input  logic signed [FACTOR_1_WIDTH-1:0] i_factor_1,
-    input  logic signed [ADDEND_WIDTH-1:0]   i_addend,
+    input  logic signed [FACTOR_0_WIDTH-1:0] factor_0_i,
+    input  logic signed [FACTOR_1_WIDTH-1:0] factor_1_i,
+    input  logic signed [ADDEND_WIDTH-1:0]   addend_i,
 
-    output logic signed [RESULT_WIDTH-1:0]   o_result
+    output logic signed [RESULT_WIDTH-1:0]   result_o
 );
 
     logic signed [FACTOR_0_WIDTH+FACTOR_1_WIDTH-1:0] product;
     logic signed [RESULT_WIDTH-1:0] product_ext;
     logic signed [RESULT_WIDTH-1:0] addend_ext;
 
-    assign product = $signed(i_factor_0) * $signed(i_factor_1);
+    assign product = factor_0_i * factor_1_i;
 
-    assign product_ext = $signed(product);
-    assign addend_ext  = $signed(i_addend);
+    assign product_ext = product;
+    assign addend_ext  = addend_i;
 
-    assign o_result = product_ext + addend_ext;
+    assign result_o = product_ext + addend_ext;
 
 endmodule
