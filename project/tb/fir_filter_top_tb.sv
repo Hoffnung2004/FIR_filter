@@ -1,15 +1,16 @@
 `timescale 1ns / 1ps
-import fir_filter_params_pkg::*;
 
 module fir_filter_top_tb;
+    import fir_filter_params_pkg::*;
+
     localparam string FILE_DIR = "../../../../fir_filter_project.ip_user_files/mem_init_files/";
+
     // Параметры теста
     localparam int TEST_NUM = 9;          // <-- МЕНЯТЬ ЭТОТ НОМЕР ДЛЯ РАЗНЫХ ТЕСТОВ
-    localparam int DELAY    = 2;         // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ 
-    
+    localparam int DELAY    = 2;          // <-- ЗАДЕРЖКА ФИЛЬТРА В ТАКТАХ
+
     // Сигналы
     logic clk_i;
-    logic reset_i;
     logic signed [SIGNAL_WIDTH-1:0] signal_i;
     logic signed [TREE_BIT_WIDTH[TREE_LEN-1][0]-1:0] signal_o;
 
@@ -28,16 +29,16 @@ module fir_filter_top_tb;
     // DUT
     fir_filter_top dut (
         .clk_i   (clk_i),
-        .reset_i (reset_i),
         .signal_i(signal_i),
         .signal_o(signal_o)
     );
 
     // Clock generation
     always #5 clk_i = ~clk_i; // 100 MHz
-    
+
     initial begin
         string file_in, file_out;
+
         $sformat(file_in,  "%stest%0d_in.txt",  FILE_DIR, TEST_NUM);
         $sformat(file_out, "%stest%0d_out.txt", FILE_DIR, TEST_NUM);
 
@@ -49,12 +50,10 @@ module fir_filter_top_tb;
             $finish;
         end
 
-        // Reset
-        reset_i = 1'b1;
+        // Инициализация
         clk_i = 1'b0;
         signal_i = 0;
         #20;
-        reset_i = 1'b0;
 
         sample_cnt = -1;
         eof_in = 0;
@@ -62,42 +61,46 @@ module fir_filter_top_tb;
         forever begin
             @(posedge clk_i);
             sample_cnt = sample_cnt + 1;
+
             // Чтение входного отсчёта
             if (!$feof(fd_in)) begin
                 if ($fscanf(fd_in, "%d", data_in) == 1) begin
                     signal_i = data_in;
-                end else begin
+                end
+                else begin
                     break;
                 end
             end
-            
+
             // Обработка выхода с учётом задержки
             if (sample_cnt >= DELAY-1) begin
-                // Читаем эталонный выход 
+                // Читаем эталонный выход
                 $fscanf(fd_out, "%d", data_out_ref);
-                                
+
                 #1;
+
                 // Вычисляем ошибку
                 curr_error = signal_o - data_out_ref;
 
                 // Накопление
-                if(sample_cnt >= DELAY+COEFF_NUM-4) begin
+                if (sample_cnt >= DELAY+COEFF_NUM-4) begin
                     sum_error = sum_error + curr_error;
 
-                // Счётчик несовпадений
-                if (signal_o !== data_out_ref) begin
-                    mismatch_cnt = mismatch_cnt + 1;
+                    // Счётчик несовпадений
+                    if (signal_o !== data_out_ref) begin
+                        mismatch_cnt = mismatch_cnt + 1;
+                    end
                 end
-                end
-            end else begin
-                curr_error = 0;
-                // До истечения DELAY - не сравниваем
             end
-
+            else begin
+                // До истечения DELAY - не сравниваем
+                curr_error = 0;
+            end
         end
 
         $fclose(fd_in);
         $fclose(fd_out);
+
         $display("Test %0d finished. Mismatches: %0d", TEST_NUM, mismatch_cnt);
         $finish;
     end
