@@ -8,6 +8,7 @@ module serdes_in#(
     input logic reset_i,
     input logic enable_i,
     input logic [BITS_W-1:0] data_i,
+    output logic pre_new_data,
     output logic new_data,
     output logic new_data2,
     output logic [BITS_W-1:0] data_o [0:P-1]
@@ -114,4 +115,5 @@ module serdes_in#(
             end
         end
     end
+    assign pre_new_data = memory_stat_ff[0];
 endmodule

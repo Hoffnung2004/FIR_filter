@@ -7,7 +7,7 @@ module adder #(parameter N = 32)(
     input logic signed [N-1:0] b_i,
     output logic signed [N-1:0] summ
     );
-    localparam int M = (N+7)/8;
+    localparam int M = N/8;
     
     logic [N-1:0] memory_a_ff [0:M-1];
     logic [N-1:0] memory_b_ff [0:M-1];

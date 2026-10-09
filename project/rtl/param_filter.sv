@@ -1,43 +1,51 @@
+`timescale 1ns / 1ps
+
 module param_filter
 #(
-    parameter int N = 16, // обязательно кратное 4
-    parameter int BITS_W = 40,
+    parameter int N            = 16, // обязательно кратно 4
+    parameter int BITS_W       = 40,
     parameter int MULT_LATENCY = 21  // Задержка умножителя в тактах
 )(
-    input logic reset_i,
-    input logic clk_i,
-    input logic enable_i,
-    input logic strob_i,
-    input logic signed [15:0] signal_i,
-    input logic signed [15:0] taps_i [0:N-1],
-    input logic order_sel_i, // 0 -> N, 1 -> N/2
+    input  logic reset_i,
+    input  logic clk_i,
+    input  logic enable_i,
+    input  logic strob_i,
+    input  logic signed [15:0] signal_i,
+    input  logic signed [15:0] taps_i [0:N-1],
+    input  logic order_sel_i, // 0 -> N, 1 -> N/2
     output logic signed [BITS_W-1:0] signal_o   
 );
-    logic enable;
-    assign enable=(enable_i&(!order_sel_i))|(enable_i&order_sel_i&strob_i);
 
-    localparam int HALF = N / 2;
+    logic enable;
+
+    assign enable = (enable_i & (!order_sel_i)) | (enable_i & order_sel_i & strob_i);
+
+    
+    localparam int HALF      = N / 2;
     localparam int NUM_PAIRS = HALF / 2;
     
-    localparam int ADDER_TREE_LATENCY = (NUM_PAIRS <= 1) ? 0 : $clog2(NUM_PAIRS);
-    localparam int TOTAL_LATENCY = MULT_LATENCY + ADDER_TREE_LATENCY + 2;
+    localparam int ADDER_LATENCY      = BITS_W / 8 + 2;
+    localparam int TREE_LEVELS        = (NUM_PAIRS <= 1) ? 0 : $clog2(NUM_PAIRS);
+    localparam int ADDER_TREE_LATENCY = TREE_LEVELS * ADDER_LATENCY;
     
+    localparam int LATENCY_TO_STAGE1  = MULT_LATENCY + ADDER_TREE_LATENCY + 1;
+
+
+
+
+
     logic signed [BITS_W-1:0] upper_ff  [0:HALF-1];
     logic signed [BITS_W-1:0] upper_next [0:HALF-1];
     logic signed [BITS_W-1:0] lower_ff  [0:HALF-1];
     logic signed [BITS_W-1:0] lower_next [0:HALF-1];
     logic signed [BITS_W-1:0] saved_prev; 
      
-    always_comb begin: c_shift_logic     //логика сдвига с мультиплексорами в линиях задержки
-        //Формирует входы регистров upper_next и lower_next в зависимости
-        //от режима, реализуя последовательное соединение регистров или
-        //обход каждого второго регистра
+    always_comb begin: c_shift_logic
         upper_next[0] = signal_i;
     
         for (int i = 1; i < HALF; i++) begin
-            if ((i % 2) == 0) begin   // чётные
-                // mux перед регистром
-                if (order_sel_i == '0)
+            if ((i % 2) == 0) begin
+                if (order_sel_i == 1'b0)
                     upper_next[i] = upper_ff[i-1];
                 else
                     upper_next[i] = upper_ff[i-2];
@@ -46,19 +54,18 @@ module param_filter
             end
         end
     
-        if (order_sel_i == '0)
+        if (order_sel_i == 1'b0)
             lower_next[0] = upper_ff[HALF-1];
         else
             lower_next[0] = saved_prev;
     
         for (int i = 1; i < HALF; i++) begin
-            if ((i % 2) == 1) begin   // нечётные
-                // mux перед регистром
-                if (order_sel_i == '0)
+            if ((i % 2) == 1) begin
+                if (order_sel_i == 1'b0)
                     lower_next[i] = lower_ff[i-1];
                 else begin
                     if (i == 1)
-                        lower_next[i] = saved_prev;//'0;
+                        lower_next[i] = saved_prev;
                     else
                         lower_next[i] = lower_ff[i-2];
                 end
@@ -68,9 +75,7 @@ module param_filter
         end
     end: c_shift_logic
     
-    always_ff @(posedge clk_i) begin: p_upper //регистровый слой верхней линии задержки(смотрите схему в статье)
-    //Тактируется по clk_i, обновляется при enable_i = 1
-    //Содержит регистры upper_ff[0..HALF-1]
+    always_ff @(posedge clk_i) begin: p_upper
         if (reset_i) begin
             for (int i = 0; i < HALF; i++) upper_ff[i] <= '0;
         end else if (enable) begin
@@ -78,7 +83,7 @@ module param_filter
         end
     end: p_upper
     
-    always_ff @(posedge clk_i) begin: p_lower //регистровый слой нижней линии задержки
+    always_ff @(posedge clk_i) begin: p_lower
         if (reset_i) begin
             for (int i = 0; i < HALF; i++) lower_ff[i] <= '0;
         end else if (enable) begin
@@ -86,11 +91,10 @@ module param_filter
         end
     end: p_lower
     
-    always_ff @(posedge clk_i) begin : p_saved_prev //регистр, сохраняющий входной сигнал в моменты, когда enable = 0(так как enable во всех режимах имеет частоту в 2 раза меньшк clk)
-    //Сохранённое значение saved_prev используется в режиме N/2 для левого нижнего мультиплексора
+    always_ff @(posedge clk_i) begin: p_saved_prev
         if (reset_i) begin
             saved_prev <= '0;
-        end else if (enable_i&order_sel_i&(!strob_i)) begin  
+        end else if (enable_i & order_sel_i & (!strob_i)) begin  
             saved_prev <= signal_i;
         end
     end
@@ -110,30 +114,22 @@ module param_filter
     logic signed [15:0] coef_le [0:NUM_PAIRS-1];
     logic signed [15:0] coef_lo [0:NUM_PAIRS-1];
     
-    always_comb begin: c_mux //логика подготовки сэмплов и коэффициентов для умножителей
-    //подключает выходы мультиплексоров линий задержки к входам умножителей
-    //выбирает коэффициенты в соответствии с режимом
-    //раскладывает сэмплы и коэффициенты для четырёх деревьев сумматоров
-        //Верхняя линия
-       // samp_upper[0] = signal_i;
+    always_comb begin: c_mux
         for (int k = 0; k < HALF; k++) begin
             samp_upper[k] = upper_ff[k];
         end
     
-        //Нижняя линия
-        //samp_lower[0] = lower_next[0];
         for (int k = 0; k < HALF-1; k++) begin
             samp_lower[k] = lower_ff[k];
         end
     
-        //На последний умножитель
-        if (order_sel_i == '0)
+        if (order_sel_i == 1'b0)
             samp_lower[HALF-1] = lower_ff[HALF-1];
         else
             samp_lower[HALF-1] = lower_ff[HALF-2];
     
         for (int k = 0; k < HALF; k++) begin
-            if (order_sel_i == '0) begin
+            if (order_sel_i == 1'b0) begin
                 coef_upper[k] = taps_i[k];
                 coef_lower[k] = taps_i[k + HALF];
             end else begin
@@ -166,7 +162,7 @@ module param_filter
     logic signed [BITS_W-1:0] prod_lo [0:NUM_PAIRS-1];
     
     generate
-        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_ue //умножители для верхней ветви, чётные сэмплы
+        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_ue
             multiplier16 u_mult (
                 .clk_i   (clk_i),
                 .enable_i(enable),
@@ -176,7 +172,7 @@ module param_filter
                 .m_o     (prod_raw_ue[k])
             );
         end
-        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_uo //умножители для верхней ветви, нечётные сэмплы
+        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_uo
             multiplier16 u_mult (
                 .clk_i   (clk_i),
                 .enable_i(enable),
@@ -186,7 +182,7 @@ module param_filter
                 .m_o     (prod_raw_uo[k])
             );
         end
-        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_le //умножители для нижней ветви, чётные сэмплы
+        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_le
             multiplier16 u_mult (
                 .clk_i   (clk_i),
                 .enable_i(enable),
@@ -196,7 +192,7 @@ module param_filter
                 .m_o     (prod_raw_le[k])
             );
         end
-        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_lo //умножители для нижней ветви, нечётные сэмплы
+        for (genvar k = 0; k < NUM_PAIRS; k++) begin : g_mult_lo
             multiplier16 u_mult (
                 .clk_i   (clk_i),
                 .enable_i(enable),
@@ -208,7 +204,6 @@ module param_filter
         end
     endgenerate
     
-    //Расширение знака с 32 бит до BITS_W для adder_tree
     always_comb begin: c_mult_extend
         for (int k = 0; k < NUM_PAIRS; k++) begin
             prod_ue[k] = BITS_W'($signed(prod_raw_ue[k]));
@@ -223,7 +218,6 @@ module param_filter
     logic signed [BITS_W-1:0] sum_le;
     logic signed [BITS_W-1:0] sum_lo;
 
-    //Деревья сумматоров
     generate
         adder_tree #(
             .NUM_INPUTS(NUM_PAIRS),
@@ -274,28 +268,11 @@ module param_filter
         );
     endgenerate
 
-
-    logic order_sel_delayed;
-
-    delay #(
-        .D (TOTAL_LATENCY),
-        .W (1)
-    ) u_delay_order (
-        .reset_i  (reset_i),
-        .clk_i    (clk_i),
-        .enable_i (enable),
-        .signal_i (order_sel_i),
-        .signal_o (order_sel_delayed)
-    );
-
-    logic signed [BITS_W-1:0] zero;
-    assign zero = '0;
-    
     logic signed [BITS_W-1:0] pair_a_b;
     logic signed [BITS_W-1:0] pair_b_b;
     
     always_comb begin
-        if (order_sel_delayed == '0) begin
+        if (order_sel_i == 1'b0) begin
             pair_a_b = sum_uo;
             pair_b_b = sum_lo;
         end else begin
@@ -324,23 +301,13 @@ module param_filter
         .b_i     (pair_b_b),
         .summ    (stage1_b)
     );
-    
-    logic signed [BITS_W-1:0] order_sel_stage1;
-    logic signed [BITS_W-1:0] order_sel_ext;
-    assign order_sel_ext = $signed({{(BITS_W-1){1'b0}}, order_sel_delayed});
-    
-    adder #(.N(BITS_W)) u_delay_order_stage1 (
-        .clk_i   (clk_i),
-        .enable_i(enable),
-        .reset_i (reset_i),
-        .a_i     (order_sel_ext),
-        .b_i     (zero),
-        .summ    (order_sel_stage1)
-    );
-    
+
+    logic signed [BITS_W-1:0] zero;
+    assign zero = '0;
+
     logic signed [BITS_W-1:0] stage2_b_current;
     always_comb begin
-        if (order_sel_stage1[0] == 1'b0)
+        if (order_sel_i == 1'b0)
             stage2_b_current = stage1_b;
         else
             stage2_b_current = zero;
@@ -367,22 +334,12 @@ module param_filter
         .summ    (y_prev_raw)
     );
     
-    logic signed [BITS_W-1:0] order_sel_final;
-    
-    adder #(.N(BITS_W)) u_delay_order_final (
-        .clk_i   (clk_i),
-        .enable_i(enable),
-        .reset_i (reset_i),
-        .a_i     (order_sel_stage1),
-        .b_i     (zero),
-        .summ    (order_sel_final)
-    );
-    
+    // --- Выходные регистры данных (управление по order_sel_post_add2) ---
     logic signed [BITS_W-1:0] y_current_next;
     logic signed [BITS_W-1:0] y_prev_next;
     
     always_comb begin
-        if (order_sel_final[0] == 1'b0) begin
+        if (order_sel_i == 1'b0) begin
             y_current_next = y_current_raw;
             y_prev_next    = '0;
         end else begin
@@ -406,7 +363,7 @@ module param_filter
 
     logic psc_phase_ff;
     
-    always_ff @(posedge clk_i) begin: p_psc_phase //фазовый триггер, переключается на каждом такте clk_i
+    always_ff @(posedge clk_i) begin: p_psc_phase
         if (reset_i) begin
             psc_phase_ff <= '0;
         end else if (enable_i) begin
@@ -415,27 +372,12 @@ module param_filter
     end: p_psc_phase
 
     logic signed [BITS_W-1:0] psc_out;
-    assign psc_out = (psc_phase_ff == '0) ? y_prev_ff : y_current_ff;
+    assign psc_out = (psc_phase_ff == 1'b0) ? y_prev_ff : y_current_ff;
 
     logic signed [BITS_W-1:0] signal_o_n_ff;
     logic signed [BITS_W-1:0] signal_o_n2_ff;
 
-    always_ff @(posedge clk_i) begin: p_out_n
-        if (reset_i) begin
-            signal_o_n_ff <= '0;
-        end else if (enable) begin
-            signal_o_n_ff <= y_current_ff;
-        end
-    end: p_out_n
 
-    always_ff @(posedge clk_i) begin: p_out_n2
-        if (reset_i) begin
-            signal_o_n2_ff <= '0;
-        end else begin
-            signal_o_n2_ff <= psc_out;
-        end
-    end: p_out_n2
-
-    assign signal_o = order_sel_delayed ? signal_o_n2_ff : signal_o_n_ff; //финальный мультиплексор, выбирающий выход в зависимости от order_sel_delayed
+    assign signal_o = order_sel_i ? psc_out : y_current_ff;
     
-endmodule 
+endmodule

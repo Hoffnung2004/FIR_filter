@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-
 module adder_tree #(
     parameter int NUM_INPUTS = 5, 
     parameter int BITS_W = 48,    
