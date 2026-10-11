@@ -152,6 +152,28 @@ module poly_filter_top_tb;
         .delay_o(delay2)
     );
     
+    // ===== Ловец рассинхрона valid (верификация valid_fsm) =====
+    logic        vc_match, vc_false_valid, vc_missed_valid;
+    logic [31:0] vc_false_cnt, vc_missed_cnt, vc_since_switch;
+
+    valid_check #(
+        .BITS_W(BITS_W)
+    ) vcheck (
+        .clk_i(clk_i),
+        .reset_i(reset_i),
+        .valid_i(valid_o),
+        .order_sel_i(order_sel_i),
+        .data_i(data_o),
+        .gold_n_i(gold1_o),
+        .gold_half_i(gold2_o),
+        .match_o(vc_match),
+        .false_valid_o(vc_false_valid),
+        .missed_valid_o(vc_missed_valid),
+        .false_cnt_o(vc_false_cnt),
+        .missed_cnt_o(vc_missed_cnt),
+        .since_switch_o(vc_since_switch)
+    );
+
     assign errors1 = |{gold1_o - data_o};
     assign errors2 = |{gold2_o - data_o};
     assign valid_b = (!(errors1 & errors2))&(data_o!=0);
