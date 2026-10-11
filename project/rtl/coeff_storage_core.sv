@@ -4,6 +4,7 @@ module coeff_storage_core #(
     parameter int COEFF_WIDTH = 16,
     parameter int PHASE_NUM = 3,
     parameter int TAPS_PER_PHASE = 8,
+    parameter logic signed [COEFF_WIDTH-1:0] H [0:PHASE_NUM-1][0:TAPS_PER_PHASE-1] = '{default:0},
 
     localparam int TOTAL_COEFF_NUM = PHASE_NUM * TAPS_PER_PHASE,
     localparam int COEFF_ADDR_WIDTH = (TOTAL_COEFF_NUM <= 1) ? 1 : $clog2(TOTAL_COEFF_NUM)
@@ -114,11 +115,9 @@ module coeff_storage_core #(
     // За один enable_i обновляется один tap сразу для всех фаз.
     always_ff @(posedge clk_i) begin : p_active_bank
         if(reset_i) begin
-            for(int i=0; i<PHASE_NUM; i++) begin
-                for(int j=0; j<TAPS_PER_PHASE; j++) begin
-                    active_bank_ff[i][j]<=16'b0; // only to debug
-                end
-            end
+
+               active_bank_ff<=H; // only to debug
+
 
         end else if (apply_all_i && !busy_ff && !apply_i && !wr_ena_i) begin
             for (int phase_id = 0; phase_id < PHASE_NUM; phase_id++) begin

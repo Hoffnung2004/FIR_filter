@@ -1,8 +1,8 @@
 package poly_filter_pkg;
 
     localparam int mult_latancy = 21;
-    localparam int P = 1; 
-    localparam int TAPS_PER_PHASE = 4; 
+    localparam int P = 3; 
+    localparam int TAPS_PER_PHASE = 16; 
     
     function automatic int bits_phase(input int taps_per_phase);
         return ((32 + $clog2(taps_per_phase) + 7) / 8) * 8;
@@ -17,7 +17,8 @@ package poly_filter_pkg;
     endfunction
     
     function automatic int delay_adder_three(input int num_inputs, input int bw);
-        return $clog2(num_inputs)*delay_adder(bw);
+        // $clog2(num_inputs)*delay_adder(bw);
+        return $clog2((num_inputs+3)/4)/2+(num_inputs==1 ? 2 : poly_filter_pkg::delay_adder(bw)+1); 
     endfunction
     
     // reset -> order_sel = 0 

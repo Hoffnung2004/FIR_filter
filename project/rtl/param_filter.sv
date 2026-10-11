@@ -219,7 +219,7 @@ module param_filter
     logic signed [BITS_W-1:0] sum_lo;
 
     generate
-        adder_tree #(
+        adder_tree_new #(
             .NUM_INPUTS(NUM_PAIRS),
             .BITS_W(BITS_W),
             .LEVEL(0)
@@ -231,7 +231,7 @@ module param_filter
             .summ_o   (sum_ue)
         );
 
-        adder_tree #(
+        adder_tree_new #(
             .NUM_INPUTS(NUM_PAIRS),
             .BITS_W(BITS_W),
             .LEVEL(0)
@@ -243,7 +243,7 @@ module param_filter
             .summ_o   (sum_uo)
         );
 
-        adder_tree #(
+        adder_tree_new #(
             .NUM_INPUTS(NUM_PAIRS),
             .BITS_W(BITS_W),
             .LEVEL(0)
@@ -255,7 +255,7 @@ module param_filter
             .summ_o   (sum_le)
         );
 
-        adder_tree #(
+        adder_tree_new #(
             .NUM_INPUTS(NUM_PAIRS),
             .BITS_W(BITS_W),
             .LEVEL(0)

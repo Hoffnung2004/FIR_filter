@@ -6,6 +6,7 @@ module coeff_storage_axi_lite #(
     parameter int TAPS_PER_PHASE = 8,
     parameter int AXI_DATA_WIDTH = 32,
     parameter int AXI_ADDR_WIDTH = 6,
+    parameter logic signed [COEFF_WIDTH-1:0] H [0:PHASE_NUM-1][0:TAPS_PER_PHASE-1] = '{default:0},
 
     localparam int TOTAL_COEFF_NUM = PHASE_NUM * TAPS_PER_PHASE,
     localparam int COEFF_ADDR_WIDTH = (TOTAL_COEFF_NUM <= 1) ? 1 : $clog2(TOTAL_COEFF_NUM)
@@ -270,7 +271,8 @@ module coeff_storage_axi_lite #(
     coeff_storage_core #(
         .COEFF_WIDTH(COEFF_WIDTH),
         .PHASE_NUM(PHASE_NUM),
-        .TAPS_PER_PHASE(TAPS_PER_PHASE)
+        .TAPS_PER_PHASE(TAPS_PER_PHASE),
+        .H(H)
     ) u_coeff_storage_core (
         .reset_i(reset_i),
         .clk_i(clk_i),

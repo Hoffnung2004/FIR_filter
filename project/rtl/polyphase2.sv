@@ -68,7 +68,7 @@ module polyphase2#(
         end
 
         for(phase_out = 0; phase_out < P; phase_out++) begin
-            adder_tree #(
+            adder_tree_new #(
                 .BITS_W(BITS_W),
                 .NUM_INPUTS(P)
             ) add_three(
